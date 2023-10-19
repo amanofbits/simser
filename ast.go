@@ -1,3 +1,17 @@
+// Copyright 2023 am4n0w4r
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -28,84 +42,7 @@ func astMakeByteBuffer(name string, length int, cap int) *ast.AssignStmt {
 	}
 }
 
-func astDefineVarDefault(name, typ string) ast.Stmt {
-	stmt, err := astFromStatements(fmt.Sprintf("var %s %s", name, typ))
-	if err != nil {
-		panic(err)
-	}
-	return stmt[0]
-}
-
-func astReadToSlice(targetSliceName string, targetSliceLen int) []ast.Stmt {
-	return []ast.Stmt{
-		&ast.AssignStmt{
-			Lhs: []ast.Expr{
-				ast.NewIdent("n"),
-				ast.NewIdent("err"),
-			},
-			Tok: token.DEFINE,
-			Rhs: []ast.Expr{
-				&ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X:   ast.NewIdent("r"),
-						Sel: ast.NewIdent("Read"),
-					},
-					Args: []ast.Expr{ast.NewIdent(targetSliceName)},
-				},
-			},
-		},
-		&ast.IfStmt{
-			Cond: &ast.BinaryExpr{
-				X:  ast.NewIdent("err"),
-				Op: token.NEQ,
-				Y:  ast.NewIdent("nil"),
-			},
-			Body: &ast.BlockStmt{
-				List: []ast.Stmt{
-					&ast.ReturnStmt{
-						Results: []ast.Expr{ast.NewIdent("nil"), ast.NewIdent("err")},
-					},
-				},
-			},
-		},
-		&ast.IfStmt{
-			Cond: &ast.BinaryExpr{
-				X:  ast.NewIdent("n"),
-				Op: token.NEQ,
-				Y:  ast.NewIdent(strconv.Itoa(targetSliceLen)),
-			},
-			Body: &ast.BlockStmt{
-				List: []ast.Stmt{
-					&ast.ReturnStmt{
-						Results: []ast.Expr{ast.NewIdent("nil"), ast.NewIdent("err")},
-					},
-				},
-			},
-		},
-	}
-}
-
-func astRetReadValue(sliceName string) []ast.Stmt {
-	return []ast.Stmt{
-		&ast.AssignStmt{
-			Lhs: []ast.Expr{ast.NewIdent("val")},
-			Tok: token.DEFINE,
-			Rhs: []ast.Expr{&ast.IndexExpr{
-				X:     ast.NewIdent(sliceName),
-				Index: ast.NewIdent("0"),
-			}},
-		},
-		&ast.ReturnStmt{
-			Results: []ast.Expr{&ast.UnaryExpr{
-				Op: token.AND,
-				X:  ast.NewIdent("val"),
-			}, ast.NewIdent("nil")},
-		},
-	}
-}
-
 func astFromStatements(src string) ([]ast.Stmt, error) {
-	// fset := token.NewFileSet()
 	node, err := parser.ParseExpr(fmt.Sprintf("func (r io.Reader) { %s }", src))
 	if err != nil {
 		return nil, err
