@@ -14,7 +14,10 @@
 
 module github.com/am4n0w4r/simser
 
-go 1.21.2
+// Before Go 1.21, the directive was advisory only; now it is a mandatory requirement
+// Source: https://go.dev/doc/modules/gomod-ref#go
+// So really no need to set this lower than 1.21
+go 1.21
 
 require (
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
