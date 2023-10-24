@@ -84,7 +84,6 @@ func (o Output) WriteTo(w io.Writer) (n int64, err error) {
 	src.WriteString(o.code.String())
 
 	srcStr := src.String()
-	fmt.Printf("srcStr: %v\n", srcStr)
 
 	// Parse src to check for errors
 	f, err := parser.ParseFile(o.pkg.Fset, "", srcStr, parser.ParseComments)

@@ -19,45 +19,64 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/am4n0w4r/simser/internal/generator"
 	myParser "github.com/am4n0w4r/simser/internal/parser"
 )
 
-type flags struct {
+type config struct {
+	targetFile  string
 	rawTypes    string
 	outputFile  string
 	readFnName  string
 	writeFnName string
 }
 
-func getFlags() (f flags) {
+func getConfig() (c config, err error) {
 
-	flag.StringVar(&f.rawTypes, "types", "", "comma-separated struct types to use")
-	flag.StringVar(&f.outputFile, "output", "", "name of output file")
-	flag.StringVar(&f.readFnName, "read-fn-name", "LoadFrom", "name of deserializing (read) function")
-	flag.StringVar(&f.writeFnName, "write-fn-name", "SaveTo", "name of serializing (write) function")
+	c.targetFile = os.Getenv("GOFILE")
+	c.targetFile, err = filepath.Abs(c.targetFile)
+	if err != nil {
+		return c, err
+	}
+	log.Printf("Target file: %s", c.targetFile)
+
+	fi, err := os.Stat(c.targetFile)
+	if err != nil {
+		return c, fmt.Errorf("target file error, %w", err)
+	}
+	if !fi.Mode().IsRegular() {
+		return c, fmt.Errorf("target file is not a regular file")
+	}
+
+	flag.StringVar(&c.rawTypes, "types", "", "comma-separated struct types to use")
+	flag.StringVar(&c.outputFile, "output", "", "name of output file")
+	flag.StringVar(&c.readFnName, "read-fn-name", "LoadFrom", "name of deserializing (read) function")
+	flag.StringVar(&c.writeFnName, "write-fn-name", "SaveTo", "name of serializing (write) function")
 
 	flag.Parse()
 
-	return f
+	if c.outputFile == "" {
+		c.outputFile = fmt.Sprintf("%s.simser.g.go", strings.TrimSuffix(c.targetFile, ".go"))
+	}
+
+	return c, nil
 }
 
 func main() {
-	targetFile := os.Getenv("GOFILE")
-
-	f := getFlags()
-	if f.outputFile == "" {
-		f.outputFile = fmt.Sprintf("%s.simser.g.go", strings.TrimSuffix(targetFile, ".go"))
-	}
-
-	acceptor, err := newTypeAcceptor(strings.Split(f.rawTypes, ","))
+	cfg, err := getConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	file, err := myParser.Parse(targetFile)
+	acceptor, err := newTypeAcceptor(strings.Split(cfg.rawTypes, ","))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	file, err := myParser.Parse(cfg.targetFile)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -71,13 +90,13 @@ func main() {
 
 	for _, s := range inputStructs {
 		log.Printf("Processing %s...", s.Name())
-		if err := generator.GenStructCode(s, output, f.readFnName, f.writeFnName); err != nil {
+		if err := generator.GenStructCode(s, output, cfg.readFnName, cfg.writeFnName); err != nil {
 			log.Fatal(err)
 		}
 		log.Print("Done.")
 	}
 
-	if err := writeOutputFile(output, f.outputFile); err != nil {
+	if err := writeOutputFile(output, cfg.outputFile); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -93,6 +112,6 @@ func writeOutputFile(output *generator.Output, filename string) error {
 	if _, err := output.WriteTo(file); err != nil {
 		return fmt.Errorf("failed to write outpput file, %w", err)
 	}
-	log.Printf("file %s written", filename)
+	log.Print("Target file written")
 	return nil
 }
