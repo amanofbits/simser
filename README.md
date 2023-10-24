@@ -1,5 +1,5 @@
-# simser
-**sim**ple struct binary **ser**ialization code generator for GO
+# Simser
+**Sim**ple **ser**ialization code generator for GO structs with unexported fields
 
 This is a generator that should help with simple sequential reading/writing of structs to/from binary file.  
 `binary.Read` actually does the same thing and, probably, does this well, but it has a drawback - it doesn't work with non-exported fields.  
