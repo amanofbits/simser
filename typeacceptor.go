@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"go/ast"
 
+	"github.com/am4n0w4r/simser/internal/domain"
 	"golang.org/x/exp/maps"
 )
 
@@ -30,6 +31,9 @@ func newTypeAcceptor(rawTypeList []string) (*typeAcceptor, error) {
 	}
 	st := map[string]uint8{}
 	for _, v := range rawTypeList {
+		if v == "" {
+			return nil, errors.Join(domain.ErrUnsupportedType, errors.New("empty type name in type list"))
+		}
 		st[v] = 0
 	}
 	return (*typeAcceptor)(&st), nil
@@ -47,11 +51,12 @@ func (st *typeAcceptor) Accepts(ts *ast.TypeSpec) bool {
 }
 
 func (ts typeAcceptor) IsDrained() bool {
-	_, hasAll := ts["all"]
-	if len(ts) == 1 && hasAll {
-		return false
-	}
 	return len(ts) == 0
+}
+
+func (ta typeAcceptor) AcceptsAll() bool {
+	_, hasAll := ta["all"]
+	return len(ta) == 1 && hasAll
 }
 
 func (ts typeAcceptor) String() string { return fmt.Sprintf("%s", maps.Keys(ts)) }

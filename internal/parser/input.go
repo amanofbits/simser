@@ -78,8 +78,10 @@ func (fi InputFile) Ast() *ast.File { return fi.Pkg.Syntax[fi.SyntaxIdx] }
 type TypeAcceptor interface {
 	// Should return true if type is required to be serializable
 	Accepts(tspec *ast.TypeSpec) bool
-	// should return true if no more types are expected
+	// Should return true if no more types are expected
 	IsDrained() bool
+	// Should return true if acceptor has no type restrictions
+	AcceptsAll() bool
 	fmt.Stringer
 }
 
@@ -88,7 +90,7 @@ func (fi InputFile) GetInputStructs(acceptor TypeAcceptor) ([]domain.InputStruct
 	if err != nil {
 		return nil, err
 	}
-	if !acceptor.IsDrained() {
+	if !acceptor.IsDrained() && !acceptor.AcceptsAll() {
 		return nil, fmt.Errorf("types '%s' were requested but not found", acceptor)
 	}
 	if len(structs) == 0 {
