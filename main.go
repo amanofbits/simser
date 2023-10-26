@@ -59,7 +59,7 @@ func getConfig() (c config, err error) {
 	flag.Parse()
 
 	if c.outputFile == "" {
-		c.outputFile = fmt.Sprintf("%s.simser.g.go", strings.TrimSuffix(c.targetFile, ".go"))
+		c.outputFile = fmt.Sprintf("%s.simser.go", strings.TrimSuffix(c.targetFile, ".go"))
 	}
 
 	return c, nil

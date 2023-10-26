@@ -13,7 +13,8 @@ Like `binary.Read`, but a bit different and without reflection.
 array of arrays and slice of arrays are not supported right now)
 - no reflection in generated code, it is simple and fast
 - possibility to select type[s] to serialize via `-types` CLI flag
-- possibility to select output function names (and exportability, as implied by Go)
+- customize output function names
+- customize output file name
 
 ### Advanced
 - slice field length can be set to any expression that returns `int`, by using tags. Currently [de]serialized instance can be referred to as "`o`", within expression.  
@@ -30,10 +31,11 @@ Remember that only fields that get read _before_ the slice field will have meani
 
 - `-types` (required): can be a comma-separated list of types you want to process, or reserved keyword `all` for processing all top-level `struct`s, found in file.  
 `all` usage and requiredness of the argument can change in the future.
+- `-output` (optional): set output file name.
 
 #### Custom
 
-`//go:generate go run github.com/am4n0w4r/simser -types=Header -read-fn-name=customReadFnName -write-fn-name=CustomWriteFnName`
+`//go:generate go run github.com/am4n0w4r/simser -types=Header -output=file.name -read-fn-name=customReadFnName -write-fn-name=CustomWriteFnName`
 
 - `-read-fn-name` (optional): custom name for deserializing function. Is set per-file.
 - `-write-fn-name` (optional): custom name for deserializing function. Is set per-file.
