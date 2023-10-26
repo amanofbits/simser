@@ -23,22 +23,45 @@ import (
 	"github.com/am4n0w4r/simser/internal/domain"
 )
 
-func getFields(s domain.InputStruct, pkgPath string) (fields []domain.StructField, err error) {
-	fields = make([]domain.StructField, s.Type().NumFields())
+func analyzeStructs(filtered []filteredStruct, f InputFile) (structs []domain.InputStruct, err error) {
 
-	for i := 0; i < s.Type().NumFields(); i++ {
-		sField := s.Type().Field(i)
-		fTyp, err := getFieldType(sField.Type(), pkgPath)
-		field := domain.NewStructField(sField.Name(), fTyp)
+	structs = make([]domain.InputStruct, len(filtered))
+	for i, fs := range filtered {
+		s, err := analyzeStruct(fs, f.Pkg.PkgPath)
+		if err != nil {
+			return nil, err
+		}
+		structs[i] = *s
+	}
+
+	return structs, nil
+}
+
+func analyzeStruct(fs filteredStruct, pkgPath string) (s *domain.InputStruct, err error) {
+
+	s = domain.NewInputStruct(fs.name, fs.typeInfo)
+	fields := make([]domain.StructField, fs.fieldCount())
+
+	for i := 0; i < fs.fieldCount(); i++ {
+		sField := fs.typeInfo.Field(i)
+		tag := *newStructTag()
+		if err := tag.parse(fs.astType.Fields.List[i].Tag); err != nil {
+			return nil, err
+		}
+
+		fTyp, err := getFieldType(sField.Type(), pkgPath, &tag)
+
+		field := domain.NewStructField(sField.Name(), fTyp, tag.values)
 		if err != nil {
 			return nil, fmt.Errorf("field '%s.%s %s': %w", s.Name(), sField.Name(), sField.Type(), err)
 		}
 		fields[i] = field
 	}
-	return fields, nil
+	s.SetFields(fields)
+	return s, nil
 }
 
-func getFieldType(t types.Type, trimPkgPath string) (ft domain.FieldType, err error) {
+func getFieldType(t types.Type, trimPkgPath string, tag *structTag) (ft domain.FieldType, err error) {
 	switch typ := t.(type) {
 
 	case *types.Basic:
@@ -66,28 +89,48 @@ func getFieldType(t types.Type, trimPkgPath string) (ft domain.FieldType, err er
 		for underlying.Underlying() != underlying {
 			underlying = typ.Underlying()
 		}
-		ub, ok := underlying.(*types.Basic)
+		ut, ok := underlying.(*types.Basic)
 		if !ok {
 			return nil, errors.Join(domain.ErrUnsupportedType, fmt.Errorf("underlying type is not a basic type, but %T", underlying))
 		}
 		return domain.NewSimpleFieldType(
 			name,
 			size,
-			domain.NewSimpleFieldType(ub.Name(), size, nil),
+			domain.NewSimpleFieldType(ut.Name(), size, nil),
 		), nil
 
 	case *types.Array:
 		if typ.Len() < 0 {
-			return nil, errors.Join(domain.ErrUnsupportedType, errors.New("slice length cannot be determined"))
+			return nil, errors.Join(domain.ErrUnsupportedType, fmt.Errorf("array type with unknown length, %T, %v", typ, typ))
 		}
-		el, err := getFieldType(typ.Elem(), trimPkgPath)
+		el, err := getFieldType(typ.Elem(), trimPkgPath, tag)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get array element type, %T", typ.Elem())
+			return nil, fmt.Errorf("failed to get array element type, %w", err)
 		}
 		return domain.NewArrayFieldType(int(typ.Len()), el), nil
 
 	case *types.Slice:
-		return nil, errors.Join(domain.ErrUnsupportedType, errors.New("slice length cannot be determined"))
+		lenTag, ok, err := tag.getLenExpr()
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, errors.Join(domain.ErrUnsupportedType,
+				errors.New("slice length cannot be determined. use 'len' tag attribute to supply an expression (`simser:\"len=o.fieldName\"`)"))
+		}
+		if lenTag == "" {
+			return nil, errors.Join(domain.ErrUnsupportedType, errors.New("empty length expression"))
+		}
+
+		if err != nil {
+			return nil, errors.Join(domain.ErrUnsupportedType, err)
+		}
+
+		el, err := getFieldType(typ.Elem(), trimPkgPath, tag)
+		if err != nil {
+			return nil, errors.Join(domain.ErrUnsupportedType, fmt.Errorf("failed to get slice element type, %T", typ.Elem()))
+		}
+		return domain.NewSliceFieldType(lenTag, el), nil
 
 	default:
 		return nil, errors.Join(domain.ErrUnsupportedType, fmt.Errorf("%T, %v", typ, typ))

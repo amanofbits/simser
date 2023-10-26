@@ -23,25 +23,54 @@ func GenStructCode(s domain.InputStruct, out *Output, readFnName, writeFnName st
 		return nil
 	}
 
-	totalBufLen := 0
-	for i := 0; i < s.FieldCount(); i++ {
-		totalBufLen += s.Field(i).Type().Size()
-	}
+	sizeGroups := getFieldSizeGroups(s)
 
-	// Generate func (o 'typename')LoadFrom(io.Reader) (*typename, error)
+	// Generate func (o 'typename')LoadFrom(io.Reader) (*'typename', error)
 	{
 		out.AppendImport("io")
 
 		out.AppendF("func (o *%s) %s(r io.Reader) (n int, err error) {\n", s.Name(), readFnName)
-		out.AppendF("b := make([]byte, %d)\n", totalBufLen)
-		out.AppendF("p := 0\n")
+		out.AppendF("p, nRead := 0, 0\n")
+
+		out.AppendF("toRead := ")
+		if domain.IsFixedSize(sizeGroups[0]) {
+			out.AppendF("%d\n", sizeGroups[0])
+		} else {
+			out.AppendF("%s\n", s.Field(0).Type().SizeExpr())
+		}
+
+		for i := 0; i < s.FieldCount(); i++ {
+			if s.Field(i).Type().IsSequence() {
+				out.AppendF("sLen, sElSize := 0, 0\n")
+				break
+			}
+		}
+
 		out.LF()
-		out.Append(tpl_ReadNbytesIntoBuf("b", uint(totalBufLen))).LF()
+		out.AppendF("b := make([]byte, toRead)\n")
+		out.Append(tpl_ReadBytesIntoBuf("b")).LF()
 		out.LF()
 
 		for i := 0; i < s.FieldCount(); i++ {
 			field := s.Field(i)
-			out.AppendF("// %s", field.Name()).LF()
+			out.AppendF("\n// %s\n", field.Name())
+			if i != 0 {
+				if size, ok := sizeGroups[i]; ok {
+					if !domain.IsFixedSize(size) {
+						if field.Type().IsSequence() {
+							seqType := field.Type().(domain.SequenceFieldType)
+							out.AppendF("sLen, sElSize = %s, %s\n", seqType.LenExpr(), seqType.ElType().SizeExpr())
+						}
+						out.Append("p, toRead = 0, sLen * sElSize\n")
+					} else {
+						out.AppendF("p, toRead = 0, %d\n", size)
+					}
+					out.AppendF("if toRead > cap(b) {\n")
+					out.AppendF("b = make([]byte, toRead)\n")
+					out.Append("}\n")
+					out.Append(tpl_ReadBytesIntoBuf("b")).LF()
+				}
+			}
 			s, err := tpl_ReadField(field, "b")
 			if err != nil {
 				return err
@@ -60,13 +89,25 @@ func GenStructCode(s domain.InputStruct, out *Output, readFnName, writeFnName st
 	{
 		out.AppendImport("io")
 
-		out.AppendF("func (s *%s) %s(w io.Writer) (n int, err error) {\n", s.Name(), writeFnName)
-		out.AppendF("b := make([]byte, 0, %d)\n", totalBufLen)
+		out.AppendF("func (o *%s) %s(w io.Writer) (n int, err error) {\n", s.Name(), writeFnName)
+
+		out.AppendF("b := make([]byte, 0, ")
+		sb := fstringBuilder{}
+		constSize := 0
+		for i, size := range sizeGroups {
+			if !domain.IsFixedSize(size) {
+				expr := s.Field(i).Type().SizeExpr()
+				sb.WriteFString("+ %s", domain.ParenthesizeIntExpr(expr))
+				continue
+			}
+			constSize += size
+		}
+		out.AppendF("%d %s)\n", constSize, sb.String())
 		out.LF()
 
 		for i := 0; i < s.FieldCount(); i++ {
 			field := s.Field(i)
-			out.AppendF("// %s", field.Name()).LF()
+			out.AppendF("\n// %s", field.Name()).LF()
 			s, err := tpl_WriteField(field, "b")
 			if err != nil {
 				return err

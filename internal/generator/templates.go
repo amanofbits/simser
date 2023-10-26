@@ -21,16 +21,14 @@ import (
 	"github.com/am4n0w4r/simser/internal/domain"
 )
 
-// read n bytes
-func tpl_ReadNbytesIntoBuf(bufName string, n uint) string {
+// read toRead bytes
+func tpl_ReadBytesIntoBuf(bufName string) string {
 	return fmt.Sprintf(
-		`n, err = r.Read(%s)
+		`nRead, err = io.ReadFull(r, %s[:toRead])
+n += nRead
 if err != nil {
 	return n, err
-}
-if n != %d {
-	return n, err
-}`, bufName, n)
+}`, bufName)
 }
 
 func tpl_WriteField(f domain.StructField, bufName string) (t string, err error) {
@@ -41,10 +39,19 @@ func tpl_WriteField(f domain.StructField, bufName string) (t string, err error) 
 		tpl_AppendSimpleTypeToBytes(bufName, f.Name(), fType, &sb)
 
 	case *domain.ArrayFieldType:
-		sb.WriteFString("for i:=0;i<len(s.%s);i++ {\n", f.Name())
+		sb.WriteFString("for i:=0;i<len(o.%s);i++ {\n", f.Name())
 		elType, ok := fType.ElType().(*domain.SimpleFieldType)
 		if !ok {
 			return sb.String(), errors.Join(domain.ErrUnsupportedType, errors.New("array of arrays are not supported"))
+		}
+		tpl_AppendSimpleTypeToBytes("b", fmt.Sprintf("%s[i]", f.Name()), elType, &sb)
+		sb.WriteString("\n}")
+
+	case *domain.SliceFieldType:
+		sb.WriteFString("for i:=0;i<len(o.%s);i++ {\n", f.Name())
+		elType, ok := fType.ElType().(*domain.SimpleFieldType)
+		if !ok {
+			return sb.String(), errors.Join(domain.ErrUnsupportedType, errors.New("slice of arrays are not supported"))
 		}
 		tpl_AppendSimpleTypeToBytes("b", fmt.Sprintf("%s[i]", f.Name()), elType, &sb)
 		sb.WriteString("\n}")
@@ -62,7 +69,7 @@ func tpl_AppendSimpleTypeToBytes(bufName string, fieldName string, t *domain.Sim
 		if !t.IsInteger() {
 			dst.WriteFString("%s(", intStr)
 		}
-		dst.WriteFString("s.%s", fieldName)
+		dst.WriteFString("o.%s", fieldName)
 		if !t.IsInteger() {
 			dst.WriteString(")")
 		}
@@ -87,19 +94,32 @@ func tpl_ReadField(f domain.StructField, bufName string) (s string, err error) {
 		tpl_BytesToSimpleType("b", fType, &sb)
 
 	case *domain.ArrayFieldType:
-		sb.WriteFString("o.%s = [%d]%s{}\n", f.Name(), fType.Length(), fType.ElType().Name())
-
-		sb.WriteFString("for i:=0;i<len(o.%s);i++ {\n", f.Name())
-		sb.WriteFString("o.%s[i] = ", f.Name())
 		elType, ok := fType.ElType().(*domain.SimpleFieldType)
 		if !ok {
 			return sb.String(), errors.Join(domain.ErrUnsupportedType, errors.New("array of arrays are not supported"))
 		}
+
+		sb.WriteFString("o.%s = [%d]%s{}\n", f.Name(), fType.Length(), elType.Name())
+
+		sb.WriteFString("for i:=0;i<len(o.%s);i++ {\n", f.Name())
+		sb.WriteFString("o.%s[i] = ", f.Name())
+		tpl_BytesToSimpleType("b", elType, &sb)
+		sb.WriteString("\n}")
+
+	case *domain.SliceFieldType:
+		elType, ok := fType.ElType().(*domain.SimpleFieldType)
+		if !ok {
+			return sb.String(), errors.Join(domain.ErrUnsupportedType, errors.New("array of arrays are not supported"))
+		}
+		sb.WriteFString("o.%s = make([]%s, sLen)\n", f.Name(), fType.ElType().Name())
+
+		sb.WriteFString("for i:=0;i<len(o.%s);i++ {\n", f.Name())
+		sb.WriteFString("o.%s[i] = ", f.Name())
 		tpl_BytesToSimpleType("b", elType, &sb)
 		sb.WriteString("\n}")
 
 	default:
-		return sb.String(), fmt.Errorf("unknown field object type %T", f)
+		return sb.String(), fmt.Errorf("unknown field object type %T", fType)
 	}
 
 	return sb.String(), nil

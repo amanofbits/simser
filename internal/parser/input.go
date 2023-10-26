@@ -85,31 +85,32 @@ type TypeAcceptor interface {
 	fmt.Stringer
 }
 
-func (fi InputFile) GetInputStructs(acceptor TypeAcceptor) ([]domain.InputStruct, error) {
-	structs, err := fi.filterInputStructs(acceptor)
+func (f InputFile) GetInputStructs(acceptor TypeAcceptor) ([]domain.InputStruct, error) {
+	filtered, err := f.filterInputStructs(acceptor)
 	if err != nil {
 		return nil, err
 	}
 	if !acceptor.IsDrained() && !acceptor.AcceptsAll() {
 		return nil, fmt.Errorf("types '%s' were requested but not found", acceptor)
 	}
-	if len(structs) == 0 {
+	if len(filtered) == 0 {
 		return nil, fmt.Errorf("no types %s found", acceptor)
 	}
 
-	for i := 0; i < len(structs); i++ {
-		fields, err := getFields(structs[i], fi.Pkg.PkgPath)
-		if err != nil {
-			return nil, err
-		}
-		structs[i].SetFields(fields)
-	}
-	return structs, nil
+	return analyzeStructs(filtered, f)
 }
 
-func (f InputFile) filterInputStructs(acceptor TypeAcceptor) (typs []domain.InputStruct, err error) {
+type filteredStruct struct {
+	name     string
+	astType  *ast.StructType
+	typeInfo *types.Struct
+}
+
+func (s filteredStruct) fieldCount() int { return s.typeInfo.NumFields() }
+
+func (f InputFile) filterInputStructs(acceptor TypeAcceptor) (structs []filteredStruct, err error) {
 	fileAst := f.Ast()
-	typs = []domain.InputStruct{}
+	structs = []filteredStruct{}
 
 	for _, d := range fileAst.Decls {
 		decl, ok := d.(*ast.GenDecl)
@@ -121,20 +122,26 @@ func (f InputFile) filterInputStructs(acceptor TypeAcceptor) (typs []domain.Inpu
 			if !ok || !acceptor.Accepts(tspec) {
 				continue
 			}
-			specType, ok := tspec.Type.(*ast.StructType)
+			structName := tspec.Name.Name
+			astStruct, ok := tspec.Type.(*ast.StructType)
 			if !ok {
 				continue
 			}
 
-			typ := f.Pkg.TypesInfo.TypeOf(specType)
-			if typ == nil {
-				return typs, fmt.Errorf("cannot determine type for field %s", tspec.Name.Name)
+			ti := f.Pkg.TypesInfo.TypeOf(astStruct)
+			if ti == nil {
+				return structs, fmt.Errorf("cannot get type info for struct %s", structName)
 			}
-			structType, ok := typ.(*types.Struct)
+			structType, ok := ti.(*types.Struct)
 			if !ok {
-				return typs, fmt.Errorf("type %v is not a struct but %T", typ, typ)
+				return structs, fmt.Errorf("type %v is not a struct but %T", ti, ti)
 			}
-			typs = append(typs, domain.NewInputStruct(tspec.Name.Name, structType))
+
+			structs = append(structs, filteredStruct{
+				name:     structName,
+				astType:  astStruct,
+				typeInfo: structType,
+			})
 			if acceptor.IsDrained() {
 				break
 			}
@@ -143,7 +150,7 @@ func (f InputFile) filterInputStructs(acceptor TypeAcceptor) (typs []domain.Inpu
 			break
 		}
 	}
-	return typs, nil
+	return structs, nil
 }
 
 func pathToImport(file, moddir, modname string) (string, error) {
