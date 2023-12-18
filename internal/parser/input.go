@@ -1,4 +1,4 @@
-// Copyright 2023 am4n0w4r
+// Copyright 2023 amanofbits
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/am4n0w4r/simser/internal/domain"
+	"github.com/amanofbits/simser/internal/domain"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/packages"
 )

@@ -1,4 +1,4 @@
-// Copyright 2023 am4n0w4r
+// Copyright 2023 amanofbits
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/am4n0w4r/simser/internal/generator"
-	myParser "github.com/am4n0w4r/simser/internal/parser"
+	"github.com/amanofbits/simser/internal/generator"
+	myParser "github.com/amanofbits/simser/internal/parser"
 )
 
 type config struct {

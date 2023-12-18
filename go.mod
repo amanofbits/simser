@@ -1,4 +1,4 @@
-// Copyright 2023 am4n0w4r
+// Copyright 2023 amanofbits
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-module github.com/am4n0w4r/simser
+module github.com/amanofbits/simser
 
 // Before Go 1.21, the directive was advisory only; now it is a mandatory requirement
 // Source: https://go.dev/doc/modules/gomod-ref#go
-// So really no need to set this lower than 1.21
-go 1.21
+go 1.18
 
 require (
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
